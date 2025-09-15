@@ -13,6 +13,7 @@ import 'reactflow/dist/style.css'
 import './App.css'
 import Sidebar from './components/Sidebar'
 import CustomNode from './components/CustomNode'
+import { SimulationEngine } from './utils/SimulationEngine'
 
 const nodeTypes = {
   probabilityNode: CustomNode,
@@ -31,9 +32,46 @@ const initialNodes: Node[] = [
       ]
     },
   },
+  {
+    id: '2',
+    type: 'probabilityNode',
+    position: { x: 500, y: 50 },
+    data: { 
+      label: 'Success Path',
+      outputs: [
+        { id: 'out3', label: 'Great Success', probability: 0.8 },
+        { id: 'out4', label: 'Minor Success', probability: 0.2 }
+      ]
+    },
+  },
+  {
+    id: '3',
+    type: 'probabilityNode',
+    position: { x: 500, y: 200 },
+    data: { 
+      label: 'Failure Recovery',
+      outputs: [
+        { id: 'out5', label: 'Recovered', probability: 0.4 },
+        { id: 'out6', label: 'Total Failure', probability: 0.6 }
+      ]
+    },
+  },
 ]
 
-const initialEdges: Edge[] = []
+const initialEdges: Edge[] = [
+  {
+    id: 'e1-2',
+    source: '1',
+    target: '2',
+    sourceHandle: 'out1',
+  },
+  {
+    id: 'e1-3',
+    source: '1',
+    target: '3',
+    sourceHandle: 'out2',
+  },
+]
 
 function App() {
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes)
@@ -48,19 +86,15 @@ function App() {
 
   const runSimulation = useCallback(() => {
     setIsSimulating(true)
-    // Simulate processing
+    
+    // Use the new simulation engine
     setTimeout(() => {
-      const results = {
-        totalPaths: 1000,
-        outcomes: [
-          { label: 'Success Path', probability: 0.7, count: 700 },
-          { label: 'Failure Path', probability: 0.3, count: 300 }
-        ]
-      }
+      const simulationEngine = new SimulationEngine(nodes, edges)
+      const results = simulationEngine.runSimulation(10000)
       setSimulationResults(results)
       setIsSimulating(false)
-    }, 1000)
-  }, [])
+    }, 500)
+  }, [nodes, edges])
 
   const addNewNode = useCallback(() => {
     const newNode: Node = {
