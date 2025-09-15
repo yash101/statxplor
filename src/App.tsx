@@ -9,6 +9,7 @@ import {
   BackgroundVariant,
 } from 'reactflow'
 import type { Node, Edge, Connection } from 'reactflow'
+import type { SimulationResults } from './types/NodeTypes'
 import 'reactflow/dist/style.css'
 import './App.css'
 import Sidebar from './components/Sidebar'
@@ -77,7 +78,7 @@ function App() {
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes)
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges)
   const [isSimulating, setIsSimulating] = useState(false)
-  const [simulationResults, setSimulationResults] = useState<any>(null)
+  const [simulationResults, setSimulationResults] = useState<SimulationResults | null>(null)
 
   const onConnect = useCallback(
     (params: Connection) => setEdges((eds) => addEdge(params, eds)),

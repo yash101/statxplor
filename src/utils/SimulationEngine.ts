@@ -136,7 +136,6 @@ export class SimulationEngine {
       try {
         // Simple function evaluation (could be enhanced)
         if (probability.includes('Math.') || probability.includes('random')) {
-          // eslint-disable-next-line no-eval
           const result = eval(probability)
           return Math.max(0, Math.min(1, Number(result) || 0))
         }
