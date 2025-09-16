@@ -7,6 +7,7 @@ import {
   Controls,
   Background,
   BackgroundVariant,
+  MiniMap,
 } from 'reactflow'
 import type { Node, Edge, Connection } from 'reactflow'
 import type { SimulationResults } from './types/NodeTypes'
@@ -26,7 +27,7 @@ const initialNodes: Node[] = [
     type: 'probabilityNode',
     position: { x: 250, y: 100 },
     data: { 
-      label: 'Start Node',
+      label: 'Node 1',
       outputs: [
         { id: 'out1', label: 'Success', probability: 0.7 },
         { id: 'out2', label: 'Failure', probability: 0.3 }
@@ -48,7 +49,7 @@ const initialNodes: Node[] = [
   {
     id: '3',
     type: 'probabilityNode',
-    position: { x: 500, y: 200 },
+    position: { x: 500, y: 300 },
     data: { 
       label: 'Failure Recovery',
       outputs: [
@@ -79,6 +80,7 @@ function App() {
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges)
   const [isSimulating, setIsSimulating] = useState(false)
   const [simulationResults, setSimulationResults] = useState<SimulationResults | null>(null)
+  const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null)
 
   const onConnect = useCallback(
     (params: Connection) => setEdges((eds) => addEdge(params, eds)),
@@ -121,11 +123,16 @@ function App() {
           onNodesChange={onNodesChange}
           onEdgesChange={onEdgesChange}
           onConnect={onConnect}
+          onSelectionChange={(params) => {
+            const sel = params.nodes?.[0]
+            setSelectedNodeId(sel ? sel.id : null)
+          }}
           nodeTypes={nodeTypes}
           fitView
         >
           <Controls />
           <Background variant={BackgroundVariant.Dots} gap={12} size={1} />
+          <MiniMap />
         </ReactFlow>
       </div>
       <Sidebar 
@@ -133,9 +140,21 @@ function App() {
         onAddNode={addNewNode}
         isSimulating={isSimulating}
         simulationResults={simulationResults}
+        selectedNode={selectedNodeId ? nodes.find(n => n.id === selectedNodeId) as any : null}
+        onSaveNode={(nodeId, updated) => {
+          setNodes(nds => nds.map(n => n.id === nodeId ? {
+            ...n,
+            data: {
+              ...n.data,
+              label: updated.label,
+              outputs: updated.outputs,
+              error: updated.error
+            }
+          } : n))
+        }}
       />
     </div>
   )
 }
 
-export default App
+export default App;

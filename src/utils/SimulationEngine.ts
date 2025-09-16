@@ -1,5 +1,5 @@
 import type { Node, Edge } from 'reactflow'
-import type { NodeOutput, SimulationResults, SimulationResult } from '../types/NodeTypes'
+import type { NodeOutput, SimulationResults, SimulationResult, ProbabilityKind } from '../types/NodeTypes'
 
 export class SimulationEngine {
   private nodes: Node[]
@@ -101,55 +101,62 @@ export class SimulationEngine {
   }
 
   private selectOutputByProbability(outputs: NodeOutput[]): NodeOutput | null {
-    // Normalize probabilities to ensure they sum to 1
-    const totalProb = outputs.reduce((sum, output) => {
-      const prob = this.evaluateProbability(output.probability)
-      return sum + prob
-    }, 0)
-
-    if (totalProb === 0) {
-      return outputs[0] || null
+    const weights: number[] = outputs.map(o => this.evaluateOutput(o))
+    const total = weights.reduce((a, b) => a + b, 0)
+    if (total <= 0) return outputs[0] || null
+    const r = Math.random() * total
+    let acc = 0
+    for (let i = 0; i < outputs.length; i++) {
+      acc += weights[i]
+      if (r <= acc) return outputs[i]
     }
-
-    // Generate random number between 0 and totalProb
-    const random = Math.random() * totalProb
-    let cumulative = 0
-
-    for (const output of outputs) {
-      const prob = this.evaluateProbability(output.probability)
-      cumulative += prob
-      if (random <= cumulative) {
-        return output
-      }
-    }
-
     return outputs[outputs.length - 1] || null
   }
 
-  private evaluateProbability(probability: number | string): number {
-    if (typeof probability === 'number') {
-      return Math.max(0, Math.min(1, probability))
-    }
-
-    // Handle string-based probabilities (functions, LUTs, etc.)
-    if (typeof probability === 'string') {
-      try {
-        // Simple function evaluation (could be enhanced)
-        if (probability.includes('Math.') || probability.includes('random')) {
-          const result = eval(probability)
-          return Math.max(0, Math.min(1, Number(result) || 0))
-        }
-
-        // Try to parse as number
-        const parsed = parseFloat(probability)
-        if (!isNaN(parsed)) {
-          return Math.max(0, Math.min(1, parsed))
-        }
-      } catch (error) {
-        console.warn('Error evaluating probability:', probability, error)
+  private evaluateOutput(output: NodeOutput): number {
+    try {
+      const kind: ProbabilityKind = output.kind || this.inferKind(output)
+      if (kind === 'numeric') {
+        if (typeof output.probability === 'number') return this.sanitizeNumber(output.probability)
+        const parsed = parseFloat(String(output.probability))
+        return this.sanitizeNumber(parsed)
       }
+      if (kind === 'equation') {
+        if (!output.equation) return 0
+        // Lazy mathjs import pattern could be added; for now a basic eval sandbox (low risk if user controls input)
+        // WARNING: eval usage should be replaced with a real mathjs parser for safety.
+        // eslint-disable-next-line no-new-func
+        const fn = new Function(`return (${output.equation})`)
+        const val = fn()
+        return this.sanitizeNumber(val)
+      }
+      if (kind === 'function') {
+        if (!output.fnBody) return 0
+        // Provide a context object for future extension
+        // eslint-disable-next-line no-new-func
+        const fn = new Function('ctx', output.fnBody)
+        const val = fn({})
+        return this.sanitizeNumber(val)
+      }
+    } catch (err) {
+      console.warn('Probability evaluation error', err, output)
+      return 0
     }
+    return 0
+  }
 
-    return 0.5 // Default fallback
+  private inferKind(output: NodeOutput): ProbabilityKind {
+    if (typeof output.probability === 'number') return 'numeric'
+    if (output.fnBody) return 'function'
+    if (output.equation) return 'equation'
+    const str = String(output.probability || '').trim()
+    if (/^[0-9.+\-/*()\s]+$/.test(str)) return 'equation'
+    return 'numeric'
+  }
+
+  private sanitizeNumber(n: unknown): number {
+    const v = typeof n === 'number' ? n : parseFloat(String(n))
+    if (!isFinite(v) || isNaN(v)) return 0
+    return v < 0 ? 0 : v
   }
 }
