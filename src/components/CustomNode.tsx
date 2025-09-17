@@ -1,7 +1,7 @@
 import { Handle, Position } from 'reactflow'
 import type { NodeOutput } from '../types/NodeTypes'
 
-interface CustomNodeProps {
+export interface CustomNodeProps {
   data: {
     label: string
     outputs: NodeOutput[]

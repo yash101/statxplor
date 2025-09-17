@@ -71,9 +71,9 @@ export async function encodeNeverGonnaGiveJSON(
   const outParts: Uint8Array[] = [];
   outParts.push(baseBytes.subarray(0, insertionPoint));
 
-  segments.forEach((chunk, idx) => {
+  for (const [idx, chunk] of segments.entries()) {
     outParts.push(buildRickSegment(chunk, idx, total));
-  });
+  }
 
   outParts.push(baseBytes.subarray(insertionPoint));
 
@@ -93,7 +93,8 @@ export async function decodeNeverGonnaLetYouDown(
   const bytes = await toBytes(jpeg);
   assertJpeg(bytes);
   const segments = extractRickSegments(bytes);
-  if (!segments.length) return null;
+  if (!segments.length)
+    return null;
 
   // Choose the set with consistent total; ignore incomplete garbage.
   const byTotal = new Map<number, InternalSegment[]>();
@@ -111,7 +112,9 @@ export async function decodeNeverGonnaLetYouDown(
       break;
     }
   }
-  if (!chosen) return null;
+  if (!chosen)
+    return null;
+
   chosen.sort((a, b) => a.index - b.index);
   const dataBytes = concat(chosen.map(s => s.data));
   try {
@@ -130,7 +133,12 @@ export async function sniffRickPayloadMetadata(
 ): Promise<RickPayloadMeta[]> {
   const bytes = await toBytes(jpeg);
   assertJpeg(bytes);
-  return extractRickSegments(bytes).map(s => ({ index: s.index, total: s.total, size: s.data.length }));
+  return extractRickSegments(bytes)
+    .map(s => ({
+      index: s.index,
+      total: s.total,
+      size: s.data.length,
+    }));
 }
 
 // ---------- Helpers ----------
@@ -241,7 +249,11 @@ function extractRickSegments(bytes: Uint8Array): InternalSegment[] {
           const total = (payload[5] << 8) | payload[6];
           const index = (payload[7] << 8) | payload[8];
           const data = payload.subarray(HEADER_BYTES);
-          segs.push({ index, total, data });
+          segs.push({
+            index,
+            total,
+            data
+          });
         }
       }
     }

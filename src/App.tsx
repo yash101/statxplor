@@ -16,6 +16,8 @@ import './App.css'
 import Sidebar from './components/Sidebar'
 import CustomNode from './components/CustomNode'
 import { SimulationEngine } from './utils/SimulationEngine'
+import { decodeNeverGonnaLetYouDown, encodeNeverGonnaGiveJSON } from './utils/codec.v1'
+import usePopup from './components/Popup/usePopup'
 
 const nodeTypes = {
   probabilityNode: CustomNode,
@@ -76,6 +78,7 @@ const initialEdges: Edge[] = [
 ]
 
 function App() {
+  const popup = usePopup();
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes)
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges)
   const [isSimulating, setIsSimulating] = useState(false)
@@ -85,7 +88,7 @@ function App() {
   const onConnect = useCallback(
     (params: Connection) => setEdges((eds) => addEdge(params, eds)),
     [setEdges]
-  )
+  );
 
   const runSimulation = useCallback(() => {
     setIsSimulating(true)
@@ -97,7 +100,7 @@ function App() {
       setSimulationResults(results)
       setIsSimulating(false)
     }, 500)
-  }, [nodes, edges])
+  }, [nodes, edges]);
 
   const addNewNode = useCallback(() => {
     const newNode: Node = {
@@ -112,7 +115,91 @@ function App() {
       }
     }
     setNodes((nds) => [...nds, newNode])
-  }, [nodes.length, setNodes])
+  }, [nodes.length, setNodes]);
+
+  const importFromFile = async () => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.jpg,.jpeg,.rck,.json'; // allow .rck (your export) as well
+    input.value = ''; // reset the input so the same file can be selected again
+
+    input.onchange = async (e: Event) => {
+      const target = e.target as HTMLInputElement;
+      const file = target.files?.[0];
+      if (!file)
+        return;
+
+      try {
+        // Modern browsers: get an ArrayBuffer directly
+        let data: any = null;
+        try {
+          // Try treating the file as plain JSON first
+          const text = await file.text();
+          try {
+            data = JSON.parse(text);
+          } catch {
+            // Not plain JSON — fall back to the legacy encoded format
+            const arrayBuffer = await file.arrayBuffer();
+            data = await decodeNeverGonnaLetYouDown(arrayBuffer);
+          }
+        } catch (err) {
+          console.error('Failed to read/parse file', err);
+          throw err;
+        }
+
+        if (!data || !data.nodes || !data.edges) {
+          alert('Invalid file format. Please select a valid project file.');
+          return;
+        }
+
+        setSelectedNodeId(null)
+        setNodes(data.nodes)
+        setEdges(data.edges)
+        setSimulationResults(data.simulationResults || null)
+      } catch (err) {
+      console.error('Error reading file', err);
+      alert('Failed to read the file. Please ensure it is a valid project file.');
+      }
+    };
+
+    // trigger the file picker
+    input.click();
+  };
+
+  const exportToFile = async () => {
+    const data = {
+      nodes,
+      edges,
+      simulationResults,
+    };
+
+    try {
+      const res = await fetch('/rickroll.jpg')
+      if (!res.ok) {
+        alert('Failed to prepare export file. Are you connected to the internet?');
+        throw new Error(`Failed to fetch rickroll.jpg: ${res.status}`);
+      }
+
+      const arrayBuffer = await res.arrayBuffer();
+      const blob = await encodeNeverGonnaGiveJSON(data, arrayBuffer);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'export.rck';
+      document.body.appendChild(a);
+      a.click();
+
+      popup.show(
+        <div className='prose'>
+          <h1>Export ready!</h1>
+          <p>The flow has been exported and downloaded. If you don't see it in your downloads folder, right click on the image below and click "save image".</p>
+          <img src={URL.createObjectURL(blob)} alt="Exported Flow" style={{ maxWidth: '100%' }} />
+        </div>
+      );
+    } catch (err) {
+      console.error('Error fetching rickroll.jpg', err)
+    }
+  };
 
   return (
     <div className="app">
@@ -152,6 +239,8 @@ function App() {
             }
           } : n))
         }}
+        onImport={importFromFile}
+        onExport={exportToFile}
       />
     </div>
   )
