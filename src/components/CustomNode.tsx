@@ -5,7 +5,7 @@ export interface CustomNodeProps {
   data: {
     label: string
     outputs: NodeOutput[]
-    error: number | null
+    error_term: number | null
   }
 }
 
@@ -53,7 +53,7 @@ function CustomNode({ data }: CustomNodeProps) {
               className='output-probability'
               style={{ whiteSpace: 'nowrap' }}
             >
-              {data?.error || 'None'}
+              {data?.error_term || 'None'}
             </span>
           </div>
       </div>

@@ -10,7 +10,7 @@ import {
   MiniMap,
 } from 'reactflow'
 import type { Node, Edge, Connection } from 'reactflow'
-import type { SimulationResults } from './types/NodeTypes'
+import type { ProbabilityNode, SimulationResults } from './types/NodeTypes'
 import 'reactflow/dist/style.css'
 import './App.css'
 import Sidebar from './components/Sidebar'
@@ -18,6 +18,7 @@ import CustomNode from './components/CustomNode'
 import { SimulationEngine } from './utils/SimulationEngine'
 import { decodeNeverGonnaLetYouDown, encodeNeverGonnaGiveJSON } from './utils/codec.v1'
 import usePopup from './components/Popup/usePopup'
+import { SimulationEngineV2 } from './utils/simulation.v2'
 
 const nodeTypes = {
   probabilityNode: CustomNode,
@@ -30,6 +31,7 @@ const initialNodes: Node[] = [
     position: { x: 250, y: 100 },
     data: { 
       label: 'Node 1',
+      error_term: 0.1,
       outputs: [
         { id: 'out1', label: 'Success', probability: 0.7 },
         { id: 'out2', label: 'Failure', probability: 0.3 }
@@ -42,6 +44,7 @@ const initialNodes: Node[] = [
     position: { x: 500, y: 50 },
     data: { 
       label: 'Success Path',
+      error_term: 0.1,
       outputs: [
         { id: 'out3', label: 'Great Success', probability: 0.8 },
         { id: 'out4', label: 'Minor Success', probability: 0.2 }
@@ -54,13 +57,14 @@ const initialNodes: Node[] = [
     position: { x: 500, y: 300 },
     data: { 
       label: 'Failure Recovery',
+      error_term: 0.1,
       outputs: [
         { id: 'out5', label: 'Recovered', probability: 0.4 },
         { id: 'out6', label: 'Total Failure', probability: 0.6 }
       ]
     },
   },
-]
+];
 
 const initialEdges: Edge[] = [
   {
@@ -79,11 +83,16 @@ const initialEdges: Edge[] = [
 
 function App() {
   const popup = usePopup();
-  const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes)
+  const [nodes, setNodes, onNodesChange] = useNodesState<ProbabilityNode>(initialNodes)
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges)
+
   const [isSimulating, setIsSimulating] = useState(false)
   const [simulationResults, setSimulationResults] = useState<SimulationResults | null>(null)
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null)
+
+  console.log('Nodes: ', nodes);
+  console.log('Edges: ', edges);
+  console.log('Graph', new SimulationEngineV2().buildSimTree(nodes, edges));
 
   const onConnect = useCallback(
     (params: Connection) => setEdges((eds) => addEdge(params, eds)),
@@ -109,8 +118,13 @@ function App() {
       position: { x: Math.random() * 400 + 100, y: Math.random() * 300 + 100 },
       data: {
         label: `Node ${nodes.length + 1}`,
+        error_term: 0.0,
         outputs: [
-          { id: `out-${Date.now()}`, label: 'Output', probability: 0.5 }
+          {
+            id: `out-${Date.now()}`,
+            label: 'Output',
+            probability: 0.5
+          }
         ]
       }
     }
@@ -157,8 +171,8 @@ function App() {
         setEdges(data.edges)
         setSimulationResults(data.simulationResults || null)
       } catch (err) {
-      console.error('Error reading file', err);
-      alert('Failed to read the file. Please ensure it is a valid project file.');
+        console.error('Error reading file', err);
+        alert('Failed to read the file. Please ensure it is a valid project file.');
       }
     };
 
@@ -235,7 +249,7 @@ function App() {
               ...n.data,
               label: updated.label,
               outputs: updated.outputs,
-              error: updated.error
+              error_term: updated.error_term
             }
           } : n))
         }}

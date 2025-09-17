@@ -13,7 +13,7 @@ export interface ProbabilityNode {
   id: string
   label: string
   outputs: NodeOutput[]
-  error?: number // Optional uncertainty metadata
+  error_term: number // Optional uncertainty metadata
 }
 
 export interface SimulationResult {

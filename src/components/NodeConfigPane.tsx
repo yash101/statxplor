@@ -15,8 +15,8 @@ export const NodeConfigPane = ({ node, onSave }: Props) => {
     id: node.id,
     label: node.data.label,
     outputs: node.data.outputs.map(o => ({ ...o })),
-    error: (node.data as ProbabilityNode).error
-  }))
+    error_term: (node.data as ProbabilityNode).error_term
+  }));
 
   const updateOutput = (index: number, patch: Partial<NodeOutput>) => {
     setDraft(d => {
@@ -87,7 +87,7 @@ export const NodeConfigPane = ({ node, onSave }: Props) => {
         <input
           type='number'
           className='w-full border rounded px-2 py-1 text-sm'
-          value={draft.error ?? ''}
+          value={draft.error_term ?? ''}
           onChange={e => setDraft(d => ({ ...d, error: e.target.value === '' ? undefined : Number(e.target.value) }))}
         />
       </div>
@@ -162,7 +162,7 @@ export const NodeConfigPane = ({ node, onSave }: Props) => {
             id: node.id,
             label: node.data.label,
             outputs: node.data.outputs.map(o => ({ ...o })),
-            error: (node.data as ProbabilityNode).error
+            error_term: (node.data as ProbabilityNode).error_term,
           })}
         >
           Reset
