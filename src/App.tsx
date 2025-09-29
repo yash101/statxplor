@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import {
   ReactFlow,
   addEdge,
@@ -15,10 +15,10 @@ import 'reactflow/dist/style.css'
 import './App.css'
 import Sidebar from './components/Sidebar'
 import CustomNode from './components/CustomNode'
-import { SimulationEngine } from './utils/SimulationEngine'
-import { decodeNeverGonnaLetYouDown, encodeNeverGonnaGiveJSON } from './utils/codec.v1'
+import { decodeNeverGonnaLetYouDown, getRickRollJpg } from './utils/codec.v1'
 import usePopup from './components/Popup/usePopup'
-import { SimulationEngineV2 } from './utils/simulation.v2'
+import { useSimulator } from './contexts/simulator'
+import { ExportDialog } from './components/dialog/ExportDialog'
 
 const nodeTypes = {
   probabilityNode: CustomNode,
@@ -79,36 +79,53 @@ const initialEdges: Edge[] = [
     target: '3',
     sourceHandle: 'out2',
   },
-]
+];
 
 function App() {
   const popup = usePopup();
-  const [nodes, setNodes, onNodesChange] = useNodesState<ProbabilityNode>(initialNodes)
-  const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges)
+  const simulator = useSimulator();
+  const [nodes, setNodes, onNodesChange] = useNodesState<ProbabilityNode>(initialNodes);
+  const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
 
-  const [isSimulating, setIsSimulating] = useState(false)
-  const [simulationResults, setSimulationResults] = useState<SimulationResults | null>(null)
-  const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null)
+  const [isSimulating, setIsSimulating] = useState(false);
+  const [simulationResults, setSimulationResults] = useState<SimulationResults | null>(null);
+  const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
 
-  console.log('Nodes: ', nodes);
-  console.log('Edges: ', edges);
-  console.log('Graph', new SimulationEngineV2().buildSimTree(nodes, edges));
+  // Load rickroll.jpg into cache on first load
+  useEffect(() => {
+    setTimeout(getRickRollJpg, 5000);
+  }, []);
 
+  // when nodes are connected
   const onConnect = useCallback(
     (params: Connection) => setEdges((eds) => addEdge(params, eds)),
     [setEdges]
   );
 
   const runSimulation = useCallback(() => {
-    setIsSimulating(true)
-    
-    // Use the new simulation engine
-    setTimeout(() => {
-      const simulationEngine = new SimulationEngine(nodes, edges)
-      const results = simulationEngine.runSimulation(10000)
-      setSimulationResults(results)
-      setIsSimulating(false)
-    }, 500)
+    setIsSimulating(true);
+
+    // Use the v2 simulation engine
+    simulator.reset();
+    const simHead = simulator.buildSimTree(nodes, edges);
+    console.log('Built sim tree:', simHead);
+    simulator
+      .runSimulation({
+        graph: simHead,
+        rays: 10000,
+        frontierSize: 1000,
+        workers: 1,
+      })
+      .then(() => {
+        // After run completes, the simHead has aggregated hits in its nodes
+        // You could map these back into a UI-visible results object here
+        setIsSimulating(false);
+        console.log('Simulation complete. Sim head:', simulator.getResults());
+      })
+      .catch((err) => {
+        console.error(err);
+        setIsSimulating(false);
+      });
   }, [nodes, edges]);
 
   const addNewNode = useCallback(() => {
@@ -180,40 +197,40 @@ function App() {
     input.click();
   };
 
-  const exportToFile = async () => {
-    const data = {
-      nodes,
-      edges,
-      simulationResults,
-    };
+  // const exportToFile = async () => {
+  //   const data = {
+  //     nodes,
+  //     edges,
+  //     simulationResults,
+  //   };
 
-    try {
-      const res = await fetch('/rickroll.jpg')
-      if (!res.ok) {
-        alert('Failed to prepare export file. Are you connected to the internet?');
-        throw new Error(`Failed to fetch rickroll.jpg: ${res.status}`);
-      }
+  //   try {
+  //     const res = await fetch('/rickroll.jpg');
+  //     if (!res.ok) {
+  //       alert('Failed to prepare export file. Are you connected to the internet?');
+  //       throw new Error(`Failed to fetch rickroll.jpg: ${res.status}`);
+  //     }
 
-      const arrayBuffer = await res.arrayBuffer();
-      const blob = await encodeNeverGonnaGiveJSON(data, arrayBuffer);
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = 'export.rck';
-      document.body.appendChild(a);
-      a.click();
+  //     const arrayBuffer = await res.arrayBuffer();
+  //     const blob = await encodeNeverGonnaGiveJSON(data, arrayBuffer);
+  //     const url = URL.createObjectURL(blob);
+  //     const a = document.createElement('a');
+  //     a.href = url;
+  //     a.download = 'export.rck';
+  //     document.body.appendChild(a);
+  //     a.click();
 
-      popup.show(
-        <div className='prose'>
-          <h1>Export ready!</h1>
-          <p>The flow has been exported and downloaded. If you don't see it in your downloads folder, right click on the image below and click "save image".</p>
-          <img src={URL.createObjectURL(blob)} alt="Exported Flow" style={{ maxWidth: '100%' }} />
-        </div>
-      );
-    } catch (err) {
-      console.error('Error fetching rickroll.jpg', err)
-    }
-  };
+  //     popup.show(
+  //       <div className='prose'>
+  //         <h1>Export ready!</h1>
+  //         <p>Click the link below to download the exported flow. If it doesn't start automatically, right-click the link and choose "Save link as…".</p>
+  //         <a href={url} download="export.rck">Download exported flow (.rck)</a>
+  //       </div>
+  //     );
+  //   } catch (err) {
+  //     console.error('Error fetching rickroll.jpg', err)
+  //   }
+  // };
 
   return (
     <div className="app">
@@ -254,7 +271,20 @@ function App() {
           } : n))
         }}
         onImport={importFromFile}
-        onExport={exportToFile}
+        onExport={() => {
+          let closePopup: Function = () => {};
+          const p = popup.show(
+            <ExportDialog
+              graphData={{
+                nodes,
+                edges,
+                simulationResults
+              }}
+              closeDialog={() => closePopup()}
+            />
+          );
+          closePopup = p.close;
+        }}
       />
     </div>
   )

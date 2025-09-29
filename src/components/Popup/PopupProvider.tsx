@@ -45,7 +45,7 @@ export const PopupProvider = ({ children }: { children: ReactNode }) => {
                 <XIcon />
               </button>
               <div
-                className='popup-content w-[90vw] h-[90vh] p-4'
+                className='popup-content max-w-[90vw] max-h-[90vh] p-4'
                 onClick={(e) => e.stopPropagation()}
                 role="dialog"
                 aria-modal="true"

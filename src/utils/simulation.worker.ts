@@ -8,6 +8,8 @@
 
 import type { SimNode, SimProbabilities } from "./simulation.v2";
 
+console.log('Simulation worker loaded');
+
 export type WorkerRunMessage = {
   type: 'run',
   rays: number,
@@ -52,19 +54,42 @@ export function getUniformRandom() {
 
   // F64 has a 53 bit significand, so we use the top 53 bits of a 64 bit RNG
   // to get a uniform float in [0, 1)
-  const hi = u32[0] >>> 6; // 27 bits
-  const lo = u32[1] >>> 5; // 26 bits
+  const hi = u32[0] >>> 6; // 26 bits
+  const lo = u32[1] >>> 5; // 27 bits
   const den = 1.0 / 9007199254740992.0; // 2^-53
   return (hi * 67108864.0 + lo) * den; // 67108864 = 2^26, to shift hi left by 26 bits
 }
 
+let shouldStop = false;
+
 self.addEventListener('message', (ev: MessageEvent) => {
   const msg = ev.data as WorkerRequestMessage;
   try {
-    // @ts-ignore postMessage on worker global
-    // self.postMessage({ id, result });
+    if (!msg || typeof msg.type !== 'string') return;
+    if (msg.type === 'stop') {
+      shouldStop = true;
+      return;
+    }
+    if (msg.type === 'results') {
+      // request current graph state
+      // no-op for now, worker will reply during simulate
+      return;
+    }
+    if (msg.type === 'run') {
+      shouldStop = false;
+      // run the simulation asynchronously
+      setTimeout(() => {
+        try {
+          simulate(msg as WorkerRunMessage);
+        } catch (err) {
+          // @ts-ignore
+          self.postMessage({ type: 'error', error: String(err) });
+        }
+      }, 0);
+    }
   } catch (err) {
-    // self.postMessage({ id, error: String(err) });
+    // @ts-ignore
+    self.postMessage({ type: 'error', error: String(err) });
   }
 });
 
@@ -130,6 +155,23 @@ function postUpdate(graph: SimNode, data: any) {
   };
 
   self.postMessage(message);
+
+  // Iterate through the graph and reset hits on all nodes
+  const queue = [ graph ];
+  const visited = new Set<SimNode>();
+  while (queue.length > 0) {
+    const node = queue.shift();
+    if (!node || visited.has(node))
+      continue;
+
+    visited.add(node);
+    node.hits = 0;
+    for (const p of node.probabilities) {
+      p.hits = 0;
+      for (const next of p.next)
+        queue.push(next);
+    }
+  }
 }
 
 function simulate(message: WorkerRunMessage) {
@@ -164,6 +206,11 @@ function simulate(message: WorkerRunMessage) {
       });
     }
 
+    if (shouldStop) {
+      postUpdate(message.graph, { raysTraced, totalNodesSeen, stopped: true });
+      return;
+    }
+
     // Single RT
     let frontier = 0;
     const queue = [ message.graph ];
@@ -186,9 +233,13 @@ function simulate(message: WorkerRunMessage) {
       }
     }
   }
-  
+
   postUpdate(message.graph, {
     raysTraced,
     totalNodesSeen,
+  });
+
+  self.postMessage({
+    type: 'done',
   });
 }

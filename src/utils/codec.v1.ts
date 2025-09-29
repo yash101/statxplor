@@ -45,6 +45,43 @@ const HEADER_BYTES = 10; // magic(4) + ver(1) + total(2) + idx(2) + flags(1)
 const MAX_SEGMENT_PAYLOAD = 65533; // per JPEG spec (length field max 0xFFFF minus 2 length bytes)
 const MAX_DATA_PER_SEGMENT = MAX_SEGMENT_PAYLOAD - HEADER_BYTES; // data room
 
+let cachedRickRollJpg: Blob | null = null;
+
+// Convenient export/import functions
+export async function exportToFile(data: unknown, _filename = 'export-nggyu.jpg'): Promise<Blob> {
+  const baseJpeg = await getRickRollJpg();
+  return await encodeNeverGonnaGiveJSON(data, baseJpeg);
+}
+
+export async function getRickRollJpg(): Promise<Blob> {
+  if (cachedRickRollJpg)
+    return cachedRickRollJpg;
+
+  const url = '/rickroll.jpg';
+  if (typeof caches !== 'undefined' && caches.open) {
+    try {
+      const cache = await caches.open('ricks-cache');
+      const cached = await cache.match(url);
+      if (cached)
+        return await cached.blob();
+
+      const res = await fetch(url);
+      if (!res.ok)
+        throw new Error(`Failed to fetch ${url}: ${res.status}`);
+      // Cache a clone and return the original
+      await cache.put(url, res.clone());
+      cachedRickRollJpg = await res.blob();
+      return cachedRickRollJpg;
+    } catch { }
+  }
+
+  const res = await fetch(url);
+  if (!res.ok)
+    throw new Error(`Failed to fetch ${url}: ${res.status}`);
+  cachedRickRollJpg = await res.blob();
+  return cachedRickRollJpg;
+}
+
 // ---------- Public API ----------
 
 /**
@@ -81,7 +118,7 @@ export async function encodeNeverGonnaGiveJSON(
   // Copy into a fresh ArrayBuffer (guaranteed plain ArrayBuffer) to appease picky TS libs.
   const ab = new ArrayBuffer(combined.byteLength);
   new Uint8Array(ab).set(combined);
-  return new Blob([ab], { type: 'image/jpeg' });
+  return new Blob([ab], { type: 'application/x-rickroll' });
 }
 
 /**
